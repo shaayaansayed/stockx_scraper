@@ -123,7 +123,7 @@ class ShoesSpider(scrapy.Spider):
 
         options = webdriver.ChromeOptions()
         # options.binary_location = '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'
-        options.binary_location = './bin/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'
+        options.binary_location = './chrome_bin/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'
         options.add_argument('headless')
         self.driver = webdriver.Chrome('./bin/chromedriver', chrome_options=options)
 
