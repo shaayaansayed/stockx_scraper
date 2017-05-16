@@ -1,15 +1,23 @@
 #!/bin/bash 
 
-mkdir chrome_bin
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	CHROME_DRIVER_PATH='https://chromedriver.storage.googleapis.com/2.29/chromedriver_mac64.zip'
+	
+	mkdir -p temp/mount 
+	curl https://dl.google.com/chrome/mac/dev/GoogleChrome.dmg > temp/1.dmg
+	yes | hdiutil attach -noverify -nobrowse -mountpoint temp/mount temp/1.dmg
+	cp -r temp/mount/*.app $BIN_DIR/
+	hdiutil detach temp/mount
+	rm -rf temp
+elif [[ "$OSTYPE" == "linux"* ]]; then 
+	CHROME_DRIVER_PATH="https://chromedriver.storage.googleapis.com/2.29/chromedriver_linux64.zip"
+fi
+CHROME_DRIVER_FILENAME="${CHROME_DRIVER_PATH##*/}"
 
-wget https://chromedriver.storage.googleapis.com/2.29/chromedriver_linux64.zip
-unzip chromedriver_linux64.zip 
-mv chromedriver chrome_bin2
-rm chromedriver_linux64.zip 
+BIN_DIR=chrome_bin
+mkdir $BIN_DIR
 
-mkdir -p temp/mount 
-curl https://dl.google.com/release2/q/canary/googlechrome.dmg > temp/1.dmg
-yes | hdiutil attach -noverify -nobrowse -mountpoint temp/mount temp/1.dmg
-cp -r temp/mount/*.app chrome_bin2/
-hdiutil detach temp/mount
-rm -r $temp
+wget $CHROME_DRIVER_PATH
+unzip $CHROME_DRIVER_FILENAME
+mv chromedriver $BIN_DIR
+rm $CHROME_DRIVER_FILENAME
