@@ -3,7 +3,6 @@ import json
 import os 
 import cPickle 
 import argparse
-import utils 
 import time 
 
 from scrapy.crawler import CrawlerProcess
