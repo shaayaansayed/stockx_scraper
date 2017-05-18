@@ -54,7 +54,7 @@ def scrape_shoe(driver, url, last_sale_dt=None) :
     else : 
         sale_history = []
         for date, time, size, price in zip(sales_dates, sales_times, sales_sizes, sales_prices) :
-            sale_dt = utils.convert2dt(date.text, time.text)
+            sale_dt = convert2dt(date.text, time.text)
 
             if sale_dt <= last_sale_dt :
                 break 
