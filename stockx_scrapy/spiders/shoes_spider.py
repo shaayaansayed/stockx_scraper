@@ -14,13 +14,18 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 
 from datetime import datetime 
+from pytz import timezone 
 
+EASTERN = timezone('US/Eastern')
 DRIVER_WAIT_TIME = 10
 
 def convert2dt(date, time) :
     if date and time :
-        return datetime.strptime(date + ' ' + time[:-4], "%A, %B %d, %Y %I:%M %p")
+        return EASTERN.localize(datetime.strptime(date + ' ' + time[:-4], "%A, %B %d, %Y %I:%M %p"))
     return None 
+
+def convert2dt_str(dt_str) :
+    return EASTERN.localize(datetime.strptime(dt_str[:-6], "%Y-%m-%d %H:%M:%S"))
 
 def scrape_shoe(driver, url, last_sale_dt=None) :
 
@@ -46,11 +51,14 @@ def scrape_shoe(driver, url, last_sale_dt=None) :
     sales_prices = driver.find_elements_by_xpath("//div[@class='modal-content']//table[@id='480']/tbody/tr/td[4]")
 
     # gather all sales if no previous sale history stored otherwise gather new sales 
+    cur_time = str(datetime.now(EASTERN))
     if last_sale_dt is None : 
         sale_history = [{'date': date.text,
                          'time': time.text,
                          'size': size.text, 
-                         'price': price.text} for date, time, size, price in zip(sales_dates, sales_times, sales_sizes, sales_prices)]
+                         'price': price.text,
+                         'sale_timestamp': str(convert2dt(date.text, time.text)),
+                         'timestamp': str(cur_time)} for date, time, size, price in zip(sales_dates, sales_times, sales_sizes, sales_prices)]
     else : 
         sale_history = []
         for date, time, size, price in zip(sales_dates, sales_times, sales_sizes, sales_prices) :
@@ -63,7 +71,9 @@ def scrape_shoe(driver, url, last_sale_dt=None) :
                 'date': date.text, 
                 'time': time.text, 
                 'size': size.text,
-                'price': price.text}
+                'price': price.text,
+                'sale_timestamp': str(sale_dt),
+                'timestamp': str(cur_time)}
             sale_history.append(sale)
 
     close_xpath = "//button[@class='close']"
@@ -84,9 +94,11 @@ def scrape_shoe(driver, url, last_sale_dt=None) :
     asks_prices = driver.find_elements_by_xpath("//div[@class='modal-body']/table[@id='400']/tbody/tr/td[2]")
     asks_avail = driver.find_elements_by_xpath("//div[@class='modal-body']/table[@id='400']/tbody/tr/td[3]")
 
+    cur_time = str(datetime.now(EASTERN))
     ask_history = [{'size': size.text,
                     'price': price.text,
-                    'avail': avail.text} for size, price, avail in zip(asks_sizes, asks_prices, asks_avail)]
+                    'avail': avail.text,
+                    'timestamp': cur_time} for size, price, avail in zip(asks_sizes, asks_prices, asks_avail)]
 
     close_xpath = "//button[@class='close']"
     close_btn = driver.find_element_by_xpath(close_xpath)
@@ -106,9 +118,11 @@ def scrape_shoe(driver, url, last_sale_dt=None) :
     bids_prices = driver.find_elements_by_xpath("//div[@class='modal-body']/table[@id='300']/tbody/tr/td[2]")
     bids_avail = driver.find_elements_by_xpath("//div[@class='modal-body']/table[@id='300']/tbody/tr/td[3]")
 
+    cur_time = str(datetime.now(EASTERN))
     bid_history = [{'size': size.text, 
                     'price': price.text, 
-                   'avail': avail.text} for size, price, avail in zip(bids_sizes, bids_prices, bids_avail)]
+                   'avail': avail.text,
+                   'timestamp': cur_time} for size, price, avail in zip(bids_sizes, bids_prices, bids_avail)]
 
     close_xpath = "//button[@class='close']"
     close_btn = driver.find_element_by_xpath(close_xpath)
@@ -153,27 +167,28 @@ class ShoesSpider(scrapy.Spider):
         filepath = './{}/{}.json'.format(self.data_dir, shoe)
 
         if not os.path.isfile(filepath) :
-            schema = {'shoe': shoe, 'last_sale_date': None, 'last_sale_time': None, 'history': []}
+            schema = {'shoe': shoe, 'sales': [], 'bids': [], 'asks': []}
             with open(filepath, 'wb') as fp :
                 json.dump(schema, fp)
 
         with open(filepath, 'rb') as fp :
             shoe_data = json.load(fp)
 
-        last_sale_dt = convert2dt(shoe_data['last_sale_date'], shoe_data['last_sale_time'])
+        if len(shoe_data['sales']) > 0 :
+            last_sale_dt = convert2dt_str(shoe_data['sales'][-1]['sale_timestamp'])
+        else : 
+            last_sale_dt = None 
 
         try : 
             start = time.time() 
             sales, asks, bids = scrape_shoe(self.driver, response.url, last_sale_dt=last_sale_dt)
             end = time.time() 
-            # from IPython import embed; embed()
-            print("{:<50} SUCCESS \t\t {:<5.2f}s {} NEW SALES.".format(shoe, end-start, len(sales)))
-            recent_history = {'sales': sales, 'asks': asks, 'bids': bids, 'timestamp': str(datetime.now())}
-            shoe_data['history'].append(recent_history)
 
-            if len(sales) > 0 :
-                shoe_data['last_sale_date'] = sales[0]['date']
-                shoe_data['last_sale_time'] = sales[0]['time']
+            print("{:<50} SUCCESS \t\t {:<5.2f}s {} NEW SALES.".format(shoe, end-start, len(sales)))
+
+            shoe_data['sales'].extend(reversed(sales))
+            shoe_data['asks'].extend(asks)
+            shoe_data['bids'].extend(bids)
 
             with open(filepath, 'wb') as fp :
                 json.dump(shoe_data, fp)
